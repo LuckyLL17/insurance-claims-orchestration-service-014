@@ -10,6 +10,11 @@
 - 可冻结、发布和回滚的规则版本
 - 证据版本链、哈希、引用快照和审计轨迹
 - 分阶段支付、追回、冲正和赔付上限账本
+- 多币种结算：损失币种、保单责任币种、支付账户币种、追回币种可不同
+- 汇率来源版本、有效时间、换算精度、舍入残差和汇兑差额的领域建模
+- 责任快照、理算批准、授权、结算、冲正全程冻结汇率快照，重放只读事件中的汇率事实
+- 同一支付重试不重复换算，部分结算与逆向冲正精确回滚到原始汇率依据
+- 跨币种余额、汇兑差额和支付对账接口
 - 设备、车辆、人员、维修厂、账户的风险关联图
 - 调查任务租约、过期提交保护和重派
 - 单案件及跨案件风险解释
@@ -33,6 +38,29 @@ curl -X POST http://localhost:4100/claims \
   -H 'content-type: application/json' \
   -H 'idempotency-key: demo-claim-1' \
   -d '{"policyId":"P-100","lossAt":"2026-10-06T08:00:00Z","reportedAt":"2026-10-06T09:00:00Z","participants":[{"kind":"person","id":"person-1"},{"kind":"vehicle","id":"car-1"}],"loss":{"currency":"CNY","gross":18000},"channel":"mobile"}'
+```
+
+## 多币种结算
+
+```bash
+# 登记汇率版本（来源、版本、有效时间）
+curl -X POST http://localhost:4100/fx/rates -H 'content-type: application/json' \
+  -d '{"pair":"USD/CNY","rateNumerator":710,"rateDenominator":100,"source":"treasury","sourceVersion":"2026-10","effectiveAt":"2026-10-01T00:00:00Z"}'
+
+# 理算批准：按批准时刻汇率折算为保单责任币种并冻结快照
+curl -X POST http://localhost:4100/claims/<id>/adjustments -H 'content-type: application/json' \
+  -d '{"amount":9000,"currency":"USD"}'
+
+# 授权 / 结算 / 冲正 / 追回（冲正可指定 settlementSourceId 精确回滚原始汇率依据）
+curl -X POST http://localhost:4100/claims/<id>/authorizations -d '{"amount":500,"currency":"USD","sourceId":"a-1"}' -H 'content-type: application/json'
+curl -X POST http://localhost:4100/claims/<id>/payments       -d '{"amount":1000,"currency":"USD","sourceId":"p-1"}' -H 'content-type: application/json'
+curl -X POST http://localhost:4100/claims/<id>/reversals      -d '{"sourceId":"r-1","settlementSourceId":"p-1"}' -H 'content-type: application/json'
+curl -X POST http://localhost:4100/claims/<id>/recoveries     -d '{"amount":1000,"currency":"USD","sourceId":"rec-1","againstSourceId":"p-1"}' -H 'content-type: application/json'
+
+# 跨币种余额 / 汇兑差额 / 支付对账
+curl http://localhost:4100/claims/<id>/payments/balances
+curl http://localhost:4100/claims/<id>/fx/differences
+curl http://localhost:4100/claims/<id>/payments/reconciliation
 ```
 
 ## 目录说明

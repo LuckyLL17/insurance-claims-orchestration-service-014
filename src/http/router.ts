@@ -4,9 +4,10 @@ import { PaymentService } from '../application/payment-service';
 import { RiskService } from '../application/risk-service';
 import { TaskService } from '../application/task-service';
 import { ReplayService } from '../application/replay-service';
+import { FxRateBook } from '../domain/fx';
 import { RuleEngine } from '../domain/rules';
 
-export interface AppContext { claims: ClaimService; payments: PaymentService; risks: RiskService; tasks: TaskService; replay: ReplayService; rules: RuleEngine; }
+export interface AppContext { claims: ClaimService; payments: PaymentService; risks: RiskService; tasks: TaskService; replay: ReplayService; rules: RuleEngine; fx: FxRateBook; }
 const json = (res: ServerResponse, status: number, value: unknown) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value, (_k, v) => v instanceof Set ? [...v] : v)); };
 const body = async (req: IncomingMessage): Promise<any> => { let data = ''; for await (const chunk of req) data += chunk; return data ? JSON.parse(data) : {}; };
 const parts = (url: string) => url.split('?')[0].split('/').filter(Boolean);
@@ -15,6 +16,8 @@ export async function route(req: IncomingMessage, res: ServerResponse, app: AppC
   try {
     const method = req.method ?? 'GET'; const path = parts(req.url ?? '/'); const input = method === 'POST' ? await body(req) : {};
     if (method === 'GET' && path[0] === 'health') return json(res, 200, { ok: true, service: 'insurance-claims-orchestration', now: new Date().toISOString() });
+    if (method === 'POST' && path[0] === 'fx' && path[1] === 'rates') return json(res, 201, app.fx.register(input));
+    if (method === 'GET' && path[0] === 'fx' && path[1] === 'rates') { const q = new URL(req.url ?? '/', 'http://localhost').searchParams; return json(res, 200, q.get('pair') && q.get('at') ? app.fx.quote(q.get('pair')!, q.get('at')!) : app.fx.list(q.get('pair') ?? undefined)); }
     if (method === 'POST' && path[0] === 'claims' && path.length === 1) return json(res, 201, app.claims.create({ ...input, loss: { ...input.loss, gross: Number(input.loss.gross) } }, 'api', req.headers['idempotency-key'] as string));
     if (path[0] !== 'claims' || !path[1]) return json(res, 404, { error: 'route not found' });
     const id = path[1];
@@ -24,8 +27,14 @@ export async function route(req: IncomingMessage, res: ServerResponse, app: AppC
     if (method === 'POST' && path[2] === 'events') return json(res, 200, app.claims.addEvent(id, input.type, input.payload, input.actor ?? 'api', input.idempotencyKey, input.occurredAt));
     if (method === 'POST' && path[2] === 'risk') return json(res, 200, app.risks.assess(id, 'api'));
     if (method === 'GET' && path[2] === 'risk') return json(res, 200, { relatedClaims: app.risks.related(id), state: app.claims.get(id) });
-    if (method === 'POST' && path[2] === 'payments') return json(res, 200, app.payments.settle(id, input, 'api'));
+    if (method === 'POST' && path[2] === 'adjustments') return json(res, 200, app.claims.approveAdjustment(id, input, 'api', req.headers['idempotency-key'] as string));
+    if (method === 'POST' && path[2] === 'authorizations') return json(res, 200, app.payments.authorize(id, input, 'api'));
+    if (method === 'POST' && path[2] === 'payments' && path.length === 3) return json(res, 200, app.payments.settle(id, input, 'api'));
+    if (method === 'GET' && path[2] === 'payments' && path[3] === 'balances') return json(res, 200, app.payments.balances(id));
+    if (method === 'GET' && path[2] === 'payments' && path[3] === 'reconciliation') return json(res, 200, app.payments.reconciliation(id));
+    if (method === 'GET' && path[2] === 'fx' && path[3] === 'differences') return json(res, 200, app.payments.fxDifferences(id));
     if (method === 'POST' && path[2] === 'reversals') return json(res, 200, app.payments.reverse(id, input, 'api'));
+    if (method === 'POST' && path[2] === 'recoveries') return json(res, 200, app.payments.recover(id, input, 'api'));
     if (method === 'POST' && path[2] === 'tasks') return json(res, 201, app.tasks.create(id, input.kind));
     if (method === 'GET' && path[2] === 'tasks') return json(res, 200, app.tasks.list(id));
     if (method === 'POST' && path[2] === 'replay') return json(res, 200, app.replay.execute(id, input.until));

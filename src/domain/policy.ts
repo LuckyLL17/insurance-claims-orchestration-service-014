@@ -5,9 +5,10 @@ export class PolicyCatalog {
   private readonly versions = new Map<string, PolicyVersion[]>();
 
   constructor() {
-    this.seed({ policyId: 'P-100', version: 1, effectiveFrom: '2025-01-01T00:00:00Z', effectiveTo: '2026-07-01T00:00:00Z', coverages: ['collision', 'theft'], deductibleMinor: 100000, limitMinor: 5000000 });
-    this.seed({ policyId: 'P-100', version: 2, effectiveFrom: '2026-07-01T00:00:00Z', coverages: ['collision', 'theft', 'rental'], deductibleMinor: 50000, limitMinor: 8000000 });
-    this.seed({ policyId: 'P-200', version: 1, effectiveFrom: '2025-01-01T00:00:00Z', coverages: ['property'], deductibleMinor: 200000, limitMinor: 12000000 });
+    this.seed({ policyId: 'P-100', version: 1, effectiveFrom: '2025-01-01T00:00:00Z', effectiveTo: '2026-07-01T00:00:00Z', coverages: ['collision', 'theft'], deductibleMinor: 100000, limitMinor: 5000000, currency: 'CNY' });
+    this.seed({ policyId: 'P-100', version: 2, effectiveFrom: '2026-07-01T00:00:00Z', coverages: ['collision', 'theft', 'rental'], deductibleMinor: 50000, limitMinor: 8000000, currency: 'CNY' });
+    this.seed({ policyId: 'P-200', version: 1, effectiveFrom: '2025-01-01T00:00:00Z', coverages: ['property'], deductibleMinor: 200000, limitMinor: 12000000, currency: 'CNY' });
+    this.seed({ policyId: 'P-300', version: 1, effectiveFrom: '2025-01-01T00:00:00Z', coverages: ['collision', 'property', 'liability'], deductibleMinor: 0, limitMinor: 100000000, currency: 'USD' });
   }
 
   seed(policy: PolicyVersion): void {
