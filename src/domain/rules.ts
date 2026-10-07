@@ -26,12 +26,14 @@ export class RuleEngine {
   freeze(): RuleSnapshot { return { version: this.activeVersion, frozenAt: new Date().toISOString(), ruleIds: (this.versions.get(this.activeVersion) ?? []).map((r) => r.id) }; }
   get(version: string): RuleDefinition[] { const rules = this.versions.get(version); if (!rules) throw new Error(`unknown rule version ${version}`); return rules.filter((rule) => rule.enabled).sort((a, b) => a.priority - b.priority); }
 
-  evaluate(claim: ClaimState, snapshot: RuleSnapshot): RuleDecision {
+  evaluate(claim: ClaimState, snapshot: RuleSnapshot, grossLiabilityMinor?: number): RuleDecision {
     const rules = this.get(snapshot.version);
     const reasons = rules.flatMap((rule) => { const reason = rule.evaluate(claim); return reason ? [`${rule.id}: ${reason}`] : []; });
     const requiredEvidence = claim.loss.gross >= 100000 ? ['loss-photo', 'repair-estimate', 'police-report'] : ['loss-photo', 'repair-estimate'];
     const signals = claim.loss.gross >= 100000 ? [{ code: 'LARGE_LOSS', score: 25, explanation: 'gross loss exceeds manual review threshold' }] : [];
-    const approvedMinor = Math.max(0, Math.min(Math.round(claim.loss.gross * 100) - (claim.policy?.deductibleMinor ?? 0), claim.policy?.limitMinor ?? 0));
+    // 理算在保单责任币种口径进行：gross 已经按责任快照冻结的汇率换算；未提供时退化为旧的单币种 CNY 算法。
+    const grossMinor = grossLiabilityMinor ?? Math.round(claim.loss.gross * 100);
+    const approvedMinor = Math.max(0, Math.min(grossMinor - (claim.policy?.deductibleMinor ?? 0), claim.policy?.limitMinor ?? 0));
     return { approvedMinor, requiredEvidence, signals, reasons };
   }
 
